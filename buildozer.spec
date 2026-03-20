@@ -4,7 +4,7 @@ package.name = subwaysport
 package.domain = com.subwaysport
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,otf,ttf,mp4,mp3,wav
-source.include_patterns = audio/*,audio/**/*,fonts/*
+source.include_patterns = audio/*,audio/**/*,fonts/*,video/*
 version = 1.0
 
 requirements = python3,kivy==2.3.0,ffpyplayer

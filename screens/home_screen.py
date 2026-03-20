@@ -1,11 +1,12 @@
 from kivy.core.window import Window
+from kivy.metrics import dp
 from kivy.uix.screenmanager import Screen
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 
 from components.theme import (
-    TEXT, TEXT_SEC, PRIMARY, ACCENT, SURFACE, SURFACE2, DISABLED, fs,
+    TEXT, TEXT_SEC, PRIMARY, ACCENT, SURFACE, SURFACE2, DISABLED, fs, adaptive_fs,
 )
 from components.styled_widgets import RoundedButton, CardBox
 from data.workouts import get_durations, get_goals
@@ -20,35 +21,35 @@ class HomeScreen(Screen):
         Window.bind(on_resize=self._on_resize)
 
     def _on_resize(self, *_):
-        self.title_lbl.font_size = fs(34)
-        self.subtitle_lbl.font_size = fs(13)
+        self.title_lbl.font_size = fs(28)
+        self.subtitle_lbl.font_size = fs(14)
         for lbl in self._section_labels:
-            lbl.font_size = fs(13)
+            lbl.font_size = fs(15)
         for btn in self._dur_btns.values():
-            btn.font_size = fs(12)
+            btn.font_size = fs(15)
         if hasattr(self, '_goal_btns'):
             for btn in self._goal_btns.values():
-                btn.font_size = fs(17)
+                btn.font_size = fs(18)
         self.start_btn.font_size = fs(18)
 
     def _build_ui(self):
         self._section_labels = []
-        root = BoxLayout(orientation='vertical', padding=[24, 48, 24, 28], spacing=24)
+        root = BoxLayout(orientation='vertical', padding=[dp(24), dp(48), dp(24), dp(28)], spacing=dp(24))
 
         # Header
         header = CardBox(
             orientation='vertical', size_hint_y=None,
-            padding=[28, 22, 28, 22], spacing=8,
+            padding=[dp(28), dp(22), dp(28), dp(22)], spacing=dp(8),
         )
         header.bind(minimum_height=header.setter('height'))
         self.title_lbl = Label(
-            text='地铁健身', font_size=fs(34), bold=True,
-            size_hint_y=None, height=44, color=TEXT, halign='left', valign='middle',
+            text='地铁健身', font_size=fs(28), bold=True,
+            size_hint_y=None, height=dp(44), color=TEXT, halign='left', valign='middle',
         )
         self.title_lbl.bind(size=lambda w, s: setattr(w, 'text_size', (s[0], None)))
         self.subtitle_lbl = Label(
             text='碎片时间  · 高效训练  · 随时随地',
-            font_size=fs(13), size_hint_y=None, height=28,
+            font_size=fs(14), size_hint_y=None, height=dp(28),
             color=TEXT_SEC, halign='left', valign='middle',
         )
         self.subtitle_lbl.bind(size=lambda w, s: setattr(w, 'text_size', (s[0], None)))
@@ -59,8 +60,8 @@ class HomeScreen(Screen):
         # 时长选择
         root.add_widget(self._section_label('训练时长'))
         self.duration_layout = BoxLayout(
-            orientation='horizontal', spacing=10,
-            size_hint_y=None, height=54,
+            orientation='horizontal', spacing=dp(10),
+            size_hint_y=None, height=dp(54),
         )
         self._build_duration_buttons()
         root.add_widget(self.duration_layout)
@@ -68,7 +69,7 @@ class HomeScreen(Screen):
         # 目的选择
         root.add_widget(self._section_label('训练目的'))
         self.goal_layout = BoxLayout(
-            orientation='vertical', spacing=12,
+            orientation='vertical', spacing=dp(12),
             size_hint_y=None,
         )
         self.goal_layout.bind(minimum_height=self.goal_layout.setter('height'))
@@ -79,7 +80,7 @@ class HomeScreen(Screen):
         # 开始按钮
         self.start_btn = RoundedButton(
             text='开始训练', font_size=fs(18),
-            size_hint_y=None, height=58,
+            size_hint_y=None, height=dp(58),
             bg_color=list(DISABLED), disabled=True,
             radius=18,
         )
@@ -90,8 +91,8 @@ class HomeScreen(Screen):
 
     def _section_label(self, text):
         lbl = Label(
-            text=text, font_size=fs(13), color=TEXT_SEC,
-            size_hint_y=None, height=22, halign='left',
+            text=text, font_size=fs(15), color=TEXT_SEC,
+            size_hint_y=None, height=dp(22), halign='left',
         )
         lbl.bind(size=lambda w, s: setattr(w, 'text_size', s))
         self._section_labels.append(lbl)
@@ -102,7 +103,7 @@ class HomeScreen(Screen):
         self._dur_btns = {}
         for d in get_durations():
             btn = RoundedButton(
-                text=f'{d}min', font_size=fs(12),
+                text=f'{d}min', font_size=fs(15),
                 bg_color=list(SURFACE2), radius=14,
             )
             btn.bind(on_press=lambda b, dur=d: self._select_duration(dur))
@@ -122,8 +123,8 @@ class HomeScreen(Screen):
         self._goal_btns = {}
         for goal in get_goals(duration):
             btn = RoundedButton(
-                text=goal, font_size=fs(17),
-                size_hint_y=None, height=64,
+                text=goal, font_size=fs(18),
+                size_hint_y=None, height=dp(64),
                 bg_color=list(SURFACE2), radius=18,
             )
             btn.bind(on_press=lambda b, g=goal: self._select_goal(g))

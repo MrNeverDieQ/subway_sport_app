@@ -7,7 +7,7 @@ from kivy.properties import (
     ListProperty, NumericProperty, StringProperty, BooleanProperty,
 )
 
-from components.theme import SURFACE, SURFACE2, TEXT, BORDER
+from components.theme import SURFACE, SURFACE2, TEXT, BORDER, fs
 
 
 class RoundedButton(ButtonBehavior, Label):
@@ -19,13 +19,21 @@ class RoundedButton(ButtonBehavior, Label):
         super().__init__(**kwargs)
         self.color = TEXT
         self.bold = True
+        self.halign = 'center'
+        self.valign = 'middle'
+        self.shorten = True
+        self.shorten_from = 'right'
         self._bg_color_instr = None
         self._bg_rect = None
         self._border_color_instr = None
         self._border_rect = None
         self.bind(pos=self._update_canvas, size=self._update_canvas,
                   bg_color=self._update_canvas, radius=self._update_canvas)
+        self.bind(size=self._bind_text_size)
         self._draw()
+
+    def _bind_text_size(self, *_):
+        self.text_size = (self.width - 12, self.height)
 
     def _draw(self):
         self.canvas.before.clear()
@@ -150,8 +158,7 @@ class CircularProgress(Widget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._label = Label(
- 
-             text=self.text, font_size='32sp', bold=True,
+            text=self.text, font_size=fs(28), bold=True,
             color=TEXT, halign='center', valign='middle',
         )
         self.add_widget(self._label)
@@ -162,7 +169,7 @@ class CircularProgress(Widget):
 
     def _on_text(self, *_):
         self._label.text = self.text
-        self._label.font_size = '32sp' if len(self.text) <= 2 else '22sp'
+        self._label.font_size = fs(28) if len(self.text) <= 2 else fs(20)
 
     def _redraw(self, *_):
         self.canvas.before.clear()

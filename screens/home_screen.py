@@ -6,7 +6,7 @@ from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 
 from components.theme import (
-    TEXT, TEXT_SEC, PRIMARY, ACCENT, SURFACE, SURFACE2, DISABLED, fs, adaptive_fs,
+    TEXT, TEXT_SEC, PRIMARY, ACCENT, SURFACE2, DISABLED, fs, adaptive_fs,
 )
 from components.styled_widgets import RoundedButton, CardBox
 from data.workouts import get_durations, get_goals
@@ -17,6 +17,7 @@ class HomeScreen(Screen):
         super().__init__(**kwargs)
         self.selected_duration = None
         self.selected_goal = None
+        self._goal_btns = {}
         self._build_ui()
         Window.bind(on_resize=self._on_resize)
 
@@ -27,9 +28,8 @@ class HomeScreen(Screen):
             lbl.font_size = fs(15)
         for btn in self._dur_btns.values():
             btn.font_size = fs(15)
-        if hasattr(self, '_goal_btns'):
-            for btn in self._goal_btns.values():
-                btn.font_size = fs(18)
+        for btn in self._goal_btns.values():
+            btn.font_size = fs(18)
         self.start_btn.font_size = fs(18)
 
     def _build_ui(self):

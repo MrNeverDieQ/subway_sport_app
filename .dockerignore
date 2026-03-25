@@ -1,0 +1,11 @@
+.buildozer_cache
+.buildozer
+bin
+output
+__pycache__
+*.pyc
+.git
+.idea
+.vscode
+*.apk
+*.aab

@@ -1,0 +1,21 @@
+FROM python:3.10-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV KIVY_NO_ARGS=1
+ENV KIVY_NO_CONSOLELOG=1
+# Headless: use SDL2 null video driver
+ENV SDL_VIDEODRIVER=dummy
+ENV SDL_AUDIODRIVER=dummy
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+    libgstreamer1.0-dev gstreamer1.0-plugins-base \
+    libmtdev-dev xclip xsel \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir kivy==2.3.0 ffpyplayer pytest
+
+WORKDIR /app
+COPY . .
+
+CMD ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]

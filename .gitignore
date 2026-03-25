@@ -15,6 +15,7 @@ build/
 .idea/
 *.log
 audio/
+audio_backup/
 data/training_blocks.py
 video/
 AGENT_NOTES.md

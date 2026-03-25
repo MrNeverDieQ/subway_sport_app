@@ -3,15 +3,27 @@ from .training_blocks import TRAINING_BLOCKS
 # 力量训练按优先级拼接的顺序
 _STRENGTH_PRIORITY = ["颈部强化训练", "臀腿隐形激活训练", "背部全域静态对抗训练", "胸部全域静态对抗训练"]
 
-# 固定时长挡位（秒）
+# 固定时长挡位（分钟）
 _DURATIONS = [10, 15, 20, 25, 30]
 
 
+def _exercise_secs(e):
+    """单个 exercise 的实际播放时长：sets 组训练 + (sets-1) 组间休息。"""
+    return e["duration"] * e["sets"] + e["rest"] * (e["sets"] - 1)
+
+
 def _block_secs(block):
-    wu = sum(e["duration"] + e["rest"] for e in block.get("warmup", []))
-    ex = sum(e["duration"] + e["rest"] for e in block["exercises"]) * block["circuit_sets"]
-    cd = sum(e["duration"] + e["rest"] for e in block.get("cooldown", []))
-    return wu + ex + cd
+    """整个训练块展开后的实际总时长。"""
+    parts = block.get("warmup", []) + block["exercises"] * block["circuit_sets"] + block.get("cooldown", [])
+    if not parts:
+        return 0
+    total = 0
+    for i, e in enumerate(parts):
+        total += _exercise_secs(e)
+        # 动作间休息（非最后一个动作）
+        if i < len(parts) - 1:
+            total += e["rest"]
+    return total
 
 
 def _expand(block):
@@ -19,7 +31,7 @@ def _expand(block):
 
 
 def get_durations():
-    return _DURATIONS
+    return list(_DURATIONS)
 
 
 def get_goals(duration):

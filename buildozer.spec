@@ -3,8 +3,10 @@ title = 地铁健身
 package.name = subwaysport
 package.domain = com.subwaysport
 source.dir = .
-source.include_exts = py,png,jpg,kv,atlas,otf,ttf,mp4,mp3,wav
+source.include_exts = py,png,jpg,kv,atlas,otf,ttf,mp4,mp3,wav,json
 source.include_patterns = audio/*,audio/**/*,fonts/*
+source.exclude_dirs = .venv, tests, bin, .buildozer, .github
+source.exclude_patterns = AGENT_NOTES.md, Dockerfile, requirements.txt
 version = 1.0
 
 requirements = python3,kivy==2.3.0,ffpyplayer

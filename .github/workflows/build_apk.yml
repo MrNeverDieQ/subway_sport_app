@@ -1,4 +1,7 @@
-name: Build APK
+# 仅做构建检查：核心资产（audio/、video/、data/training_blocks.py）不在仓库里，
+# 这里用占位数据代替，产出的 APK 能安装启动但没有真实训练内容。
+# 可用的正式包请在本机用 Dockerfile 或 buildozer 打。
+name: Build APK (CI check)
 
 on:
   push:
@@ -11,6 +14,33 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Guard - core assets must not be committed
+        run: |
+          leaked=0
+          for p in data/training_blocks.py audio video; do
+            if [ -e "$p" ]; then
+              echo "::error::核心资产 $p 出现在仓库中，请按 AGENT_NOTES.md 用 git rm --cached 移除并清理历史"
+              leaked=1
+            fi
+          done
+          [ "$leaked" -eq 0 ]
+
+      - name: Create stub training data (CI only)
+        run: |
+          mkdir -p audio video
+          cat > data/training_blocks.py <<'PY'
+          # CI 占位数据：只为验证 APK 能构建、安装、启动，不含真实训练内容。
+          _P = {"name": "占位动作", "duration": 10, "sets": 1, "rest": 5,
+                "cues": ["CI 占位数据，非真实训练内容"]}
+          TRAINING_BLOCKS = {
+              name: {"circuit_sets": 1, "warmup": [], "exercises": [dict(_P)], "cooldown": []}
+              for name in [
+                  "颈部强化训练", "臀腿隐形激活训练", "背部全域静态对抗训练",
+                  "胸部全域静态对抗训练", "呼吸核心联动训练",
+              ]
+          }
+          PY
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -51,11 +81,13 @@ jobs:
         env:
           BUILDOZER_WARN_ON_ROOT: 0
         run: |
+          set -o pipefail
           yes | buildozer android debug 2>&1 | tee build.log
           grep -E "^(Error|Traceback|# Build)" build.log || true
 
-      - name: Upload APK
+      - name: Upload APK (stub content, not for use)
         uses: actions/upload-artifact@v4
         with:
-          name: subway-sport-apk
+          name: subway-sport-apk-ci-stub
           path: bin/*.apk
+          if-no-files-found: error

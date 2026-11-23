@@ -16,3 +16,5 @@ build/
 audio/
 data/training_blocks.py
 video/
+AGENT_NOTES.md
+.venv/

@@ -27,12 +27,18 @@ def validate_timeline(tl, items, tag):
     for i, (e, _) in enumerate(items):
         segs = [s for s in tl if s['ex'] == i]
         check(f'{tag} 条目{i} 恰好 1 段 guide', sum(1 for s in segs if s['kind'] == 'guide') == 1)
-        check(f'{tag} 条目{i} set 数 = sets', sum(1 for s in segs if s['kind'] == 'set') == e['sets'])
-        check(f'{tag} 条目{i} rest 数 = sets-1', sum(1 for s in segs if s['kind'] == 'rest') == (e['sets'] - 1 if e['rest'] else 0))
         g = [s for s in segs if s['kind'] == 'guide'][0]
         prev_rest = items[i - 1][0]['rest'] if i else 0
-        check(f'{tag} 条目{i} guide 长度 = max(上一个 rest, 本模式引导时长)',
-              g['secs'] == max(prev_rest, W.guide_secs(e, g['mode'])), g['secs'])
+        if e.get('warmup'):
+            # 热身"准备"：只有一段 guide（边听边摆姿势），没有 set，不再重复一遍
+            check(f'{tag} 条目{i} 热身只有 1 段', len(segs) == 1, [s['kind'] for s in segs])
+            check(f'{tag} 条目{i} 热身时长 = max(上一个 rest, 引导时长, duration)',
+                  g['secs'] == max(prev_rest, W.guide_secs(e, g['mode']), e['duration']), g['secs'])
+        else:
+            check(f'{tag} 条目{i} set 数 = sets', sum(1 for s in segs if s['kind'] == 'set') == e['sets'])
+            check(f'{tag} 条目{i} rest 数 = sets-1', sum(1 for s in segs if s['kind'] == 'rest') == (e['sets'] - 1 if e['rest'] else 0))
+            check(f'{tag} 条目{i} guide 长度 = max(上一个 rest, 本模式引导时长)',
+                  g['secs'] == max(prev_rest, W.guide_secs(e, g['mode'])), g['secs'])
         check(f'{tag} 条目{i} 各段 mode 一致', len({s['mode'] for s in segs}) == 1)
 
 # 1) 全部 时长 × 目的 × 模式
@@ -43,7 +49,17 @@ for goal in W.get_goals(None):
             p = W.build_plan(d, goal, history=None, counts=None, mode=mode)
             tag = f'[{goal} {d}min {mode}]'
             check(f'{tag} 不超时', p.total_secs <= d * 60, f'{p.total_secs} > {d*60}')
-            check(f'{tag} 利用率 ≥ 60%', p.total_secs >= d * 60 * 0.6, f'{p.total_secs}/{d*60}')
+            # 时间用足：力量 = 没放进来的部位一个也塞不下（设计上不为填时间给同一部位加轮，所以不检查利用率）；
+            #           呼吸 = 再加 1 组就超时
+            if goal == '力量训练':
+                unused = [b for b in W._STRENGTH_BLOCKS if b not in p.blocks]
+                check(f'{tag} 剩余时间塞不进任何未练部位', all(
+                    W.timeline_secs(p.items + W._items_for([(b, 1)]), dict(p.modes, **{b: W.resolve_modes([b], mode, None)[b]})) > d * 60
+                    for b in unused), (p.total_secs, p.blocks))
+            else:
+                sets = p.parts[0][1]
+                more = [(dict(e, sets=sets + 1) if e['name'].startswith('联动循环') else e, b) for e, b in p.items]
+                check(f'{tag} 呼吸再加 1 组就超时', W.timeline_secs(more, p.modes) > d * 60, (p.total_secs, sets))
             check(f'{tag} total_secs = 时间线之和', p.total_secs == sum(s['secs'] for s in p.timeline))
             check(f'{tag} 每块都有模式', set(p.blocks) == set(p.modes))
             validate_timeline(p.timeline, p.items, tag)
@@ -72,6 +88,21 @@ for goal in W.get_goals(None):
         check(f'[{goal} {d}min] 同样的内容 详细 ≥ 简短 时长',
               pd.total_secs >= W.timeline_secs(pd.items, short_modes), (pd.total_secs, W.timeline_secs(pd.items, short_modes)))
 
+# 1b) 热身：每个块的 warmup 条目带 warmup 标记，方案里只出现一段 准备，紧接着就是第一个动作的 guide
+for goal in W.get_goals(None):
+    p = W.build_plan(15, goal, mode=W.DETAILED)
+    warm = [i for i, e in enumerate(p.entries) if e.get('warmup')]
+    check(f'[{goal}] 每个块恰好 1 个热身', len(warm) == len(p.blocks), (warm, p.blocks))
+    for i in warm:
+        segs = [s for s in p.timeline if s['ex'] == i]
+        check(f'[{goal}] 热身 {p.entries[i]["name"]} 只有 1 段 guide', [s['kind'] for s in segs] == ['guide'], segs)
+        j = p.timeline.index(segs[0])
+        check(f'[{goal}] 热身后直接是下一个动作的 guide', p.timeline[j + 1]['kind'] == 'guide' and p.timeline[j + 1]['ex'] == i + 1, p.timeline[j + 1])
+    check(f'[{goal}] total_sets 不含热身', p.total_sets == sum(e['sets'] for e in p.entries if not e.get('warmup')))
+    for b in TRAINING_BLOCKS.values():
+        for e in b.get('warmup', []):
+            check(f'原始数据不被改动: {e["name"]}', 'warmup' not in e)
+
 # 2) 自动模式：练过 ≥ FAMILIAR_AFTER 次的块切简短，其余详细
 counts = {'颈部强化训练': W.FAMILIAR_AFTER, '臀腿隐形激活训练': W.FAMILIAR_AFTER - 1}
 p = W.build_plan(30, '力量训练', counts=counts, mode=W.AUTO)
@@ -95,10 +126,12 @@ for d in W.get_durations():
     names = [e['name'] for e in p.entries]
     check(f'呼吸 {d}min 结构 = 热身+主循环+放松', len(names) == 3 and names[1].startswith('联动循环'), names)
 
-# 5) 力量：不超过块定义的 circuit_sets
-p = W.build_plan(30, '力量训练')
-for name, c in zip(p.blocks, [c for _, c in p.parts]):
-    check(f'{name} 轮数 ≤ circuit_sets', c <= TRAINING_BLOCKS[name]['circuit_sets'], c)
+# 5) 力量：每个部位一次只练一轮（不为了填满时间给同一部位加轮）
+for d in W.get_durations() + [60]:
+    for mode in (W.DETAILED, W.SHORT):
+        p = W.build_plan(d, '力量训练', mode=mode)
+        check(f'力量 {d}min {W.MODE_LABEL[mode]}：每个部位最多 1 轮', all(c == 1 for _, c in p.parts), p.parts)
+        check(f'力量 {d}min {W.MODE_LABEL[mode]}：部位不重复', len(p.blocks) == len(set(p.blocks)), p.blocks)
 
 # 6) 时间线 secs 用的是训练块数据
 e = TRAINING_BLOCKS['臀腿隐形激活训练']['exercises'][2]

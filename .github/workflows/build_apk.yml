@@ -1,6 +1,7 @@
 # 仅做构建检查：核心资产（audio/、video/、data/training_blocks.py）不在仓库里，
 # 这里用占位数据代替，产出的 APK 能安装启动但没有真实训练内容。
-# 可用的正式包请在本机用 Dockerfile 或 buildozer 打。
+# 可用的正式包在私有资产仓库 subway_sport_assets 的 Actions 里打（工作流模板 tools/assets_repo/build_apk.yml，
+# 资产用 tools/push_assets.py 同步过去），或在本机用 Dockerfile / buildozer 打。
 name: Build APK (CI check)
 
 on:

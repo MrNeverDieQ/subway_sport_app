@@ -147,6 +147,13 @@ class HomeScreen(Screen):
         root.add_widget(self.subtitle_lbl)
         root.add_widget(self._gap(8))
 
+        # 语音引导：放在最前面——它决定讲解时间要不要算进总时长，进而决定同样时间里能安排的部位和组数
+        root.add_widget(self._section_label('语音引导'))
+        self._build_mode_row()
+        root.add_widget(self.mode_row)
+        root.add_widget(self.mode_hint)
+        root.add_widget(self._gap(6))
+
         # 时长
         root.add_widget(self._section_label('训练时长'))
         self.duration_layout = BoxLayout(orientation='horizontal', size_hint_y=None)
@@ -165,7 +172,6 @@ class HomeScreen(Screen):
         # 本次方案
         self.plan_card = CardBox(orientation='vertical', size_hint_y=None)
         self.plan_card.bind(minimum_height=self.plan_card.setter('height'))
-        self._build_mode_row()
         root.add_widget(self.plan_card)
 
         # 填充，把开始按钮推到底
@@ -182,20 +188,16 @@ class HomeScreen(Screen):
         self._style_start_btn(False)
 
     def _build_mode_row(self):
-        """语音引导三段切换，只建一次，_render_plan 时挂到方案卡片里。"""
+        """语音引导三段切换 + 一行说明（说明不依赖方案，选时长之前就能看到）。"""
         self.mode_row = BoxLayout(orientation='horizontal', size_hint_y=None)
-        # 固定宽度标签：尺寸只跟随文字纹理，不反过来影响排版（避免 texture/layout 互相触发）
-        self.mode_lbl = Label(text='语音引导', font_size=fs(12), color=TEXT_SEC, size_hint=(None, None),
-                              pos_hint={'center_y': 0.5})
-        self.mode_lbl.bind(texture_size=lambda w, ts: setattr(w, 'size', (ts[0] + hs(10), ts[1])))
-        self.mode_row.add_widget(self.mode_lbl)
         self._mode_btns = {}
         for mode in (AUTO, DETAILED, SHORT):
-            btn = RoundedButton(text=MODE_LABEL[mode], font_size=fs(12))
+            btn = RoundedButton(text=MODE_LABEL[mode], font_size=fs(13))
             btn.bind(on_press=lambda b, m=mode: self._select_mode(m))
             self.mode_row.add_widget(btn)
             self._mode_btns[mode] = btn
         self.mode_hint = auto_label('', fs(11), TEXT_TER)
+        self.mode_hint.text = self._mode_hint_text()
         self._style_mode_buttons()
 
     def _gap(self, h):
@@ -224,12 +226,11 @@ class HomeScreen(Screen):
         self.plan_card.padding = [hs(20), hs(16), hs(20), hs(16)]
         self.plan_card.spacing = hs(10)
         self.plan_card.radius = hs(22)
-        self.mode_row.height = hs(34)
-        self.mode_row.spacing = hs(6)
-        self.mode_lbl.font_size = fs(12)
+        self.mode_row.height = hs(40)
+        self.mode_row.spacing = hs(8)
         for btn in self._mode_btns.values():
-            btn.font_size = fs(12)
-            btn.radius = hs(11)
+            btn.font_size = fs(13)
+            btn.radius = hs(13)
         self.mode_hint.font_size = fs(11)
         self.start_btn.font_size = fs(17)
         self.start_btn.height = hs(56)
@@ -295,6 +296,7 @@ class HomeScreen(Screen):
         self.plan = build_plan(self.selected_duration, self.selected_goal,
                                history.last_trained(), history.completed_counts(), mode)
         self.mode_hint.text = self._mode_hint_text()
+        self._render_plan()        # 模式不同方案时长也不同（详细含讲解时间），卡片里的分钟数和部位都要跟着变
 
     def _update_start_btn(self):
         ready = self.selected_duration is not None and self.selected_goal is not None
@@ -347,24 +349,29 @@ class HomeScreen(Screen):
         if plan.goal == '呼吸训练':
             detail = f'{plan.parts[0][1]} 组呼吸循环  ·  含热身与放松'
         else:
-            detail = f'{plan.total_sets} 组动作  ·  优先安排最久未练的部位'
+            detail = f'{plan.total_sets} 组动作  ·  每个部位只练一轮  ·  优先安排最久未练的部位'
         card.add_widget(auto_label(detail, fs(12), TEXT_SEC))
-
-        # 语音引导模式：三段切换，训练中不再需要任何操作
-        for w in (self.mode_row, self.mode_hint):
-            if w.parent is not None:
-                w.parent.remove_widget(w)
-        self.mode_hint.text = self._mode_hint_text()
-        card.add_widget(self.mode_row)
-        card.add_widget(self.mode_hint)
+        card.add_widget(auto_label(self._plan_mode_note(plan), fs(11), TEXT_TER))
 
     def _mode_hint_text(self):
-        plan = self.plan
-        if plan.mode_choice == AUTO:
-            return f'本次：{plan.mode_label}  ·  同一部位练满 {FAMILIAR_AFTER} 次后自动改为简短提示'
-        if plan.mode_choice == DETAILED:
-            return '每个动作开始前先听完整讲解，再开始计时；讲解时间已计入'
-        return '动作前只报名称和一句要点，不播讲解'
+        """语音引导说明：选时长之前就显示，提醒模式会影响时长和内容。"""
+        if self.mode_choice == AUTO:
+            text = f'没练过的部位先听讲解，同一部位练满 {FAMILIAR_AFTER} 次后自动改为简短提示'
+            if self.plan is not None:
+                text = f'本次：{self.plan.mode_label}  ·  ' + text
+            return text
+        if self.mode_choice == DETAILED:
+            return '每个动作前先听完整讲解再开始计时。讲解时间算进总时长，同样的时间里安排的部位和组数会少于简短提示'
+        return '动作前只报名称和一句要点，不播讲解。同样的时间里能安排更多部位和组数'
+
+    def _plan_mode_note(self, plan):
+        """方案卡片里的一行提醒：这次方案是在哪种语音模式下算出来的。"""
+        detailed_blocks = [b for b in plan.blocks if plan.modes.get(b) == DETAILED]
+        if not detailed_blocks:
+            return '按简短提示安排，不含讲解时间'
+        if len(detailed_blocks) == len(plan.blocks):
+            return '含讲解时间，所以安排的内容比简短提示少；换简短提示会变'
+        return '部分部位含讲解时间；换语音模式后内容会变'
 
     def _style_mode_buttons(self):
         for mode, btn in self._mode_btns.items():

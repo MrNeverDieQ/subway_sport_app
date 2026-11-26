@@ -2,52 +2,73 @@
 # history.py - 训练记录
 #   blocks: {训练块名: 上次训练时间戳}   用于轮换推荐
 #   counts: {训练块名: 完成次数}         用于自动选择语音引导模式
+#
+# 纯 json 读写（不用 Kivy JsonStore）：Android 前台服务进程里没有 Kivy App，训练完成时由它来记录。
+# 文件格式沿用 JsonStore 的 {"history": {"blocks": ..., "counts": ...}}，老记录可直接读。
+# 位置：set_path() 指定 > 运行中的 Kivy App 的 user_data_dir > $ANDROID_PRIVATE（服务进程）
 # ============================================================
 
+import json
 import os
+import sys
 import time
 
-_store = None
+_path_override = None
 
 
-def _get_store():
-    """App 运行中才有可写的 user_data_dir；拿不到就返回 None，调用方按无记录处理。"""
-    global _store
-    if _store is not None:
-        return _store
-    from kivy.app import App
-    from kivy.logger import Logger
-    from kivy.storage.jsonstore import JsonStore
-    app = App.get_running_app()
-    if app is None:
+def set_path(path):
+    """测试或特殊场景下指定记录文件。"""
+    global _path_override
+    _path_override = path
+
+
+def _path():
+    if _path_override:
+        return _path_override
+    base = None
+    app_mod = sys.modules.get('kivy.app')          # 不主动 import kivy：服务进程里没有也不需要
+    if app_mod is not None:
+        app = app_mod.App.get_running_app()
+        if app is not None:
+            base = app.user_data_dir
+    if not base:
+        base = os.environ.get('ANDROID_PRIVATE')
+    if not base:
         return None
-    base = app.user_data_dir
     os.makedirs(base, exist_ok=True)
-    path = os.path.join(base, 'history.json')
-    try:
-        _store = JsonStore(path)
-    except Exception as e:  # 文件损坏：挪走重建，不让训练记录功能永久失效
-        Logger.warning('history: history.json 无法读取（%s），已重建', e)
-        try:
-            os.replace(path, path + '.corrupt')
-        except OSError:
-            pass
-        _store = JsonStore(path)
-    return _store
+    return os.path.join(base, 'history.json')
 
 
 def _read():
     """返回 (blocks, counts)；读取失败返回 None（和"没有记录"区分开，避免覆盖）。"""
     try:
-        store = _get_store()
-        if store is None:
+        path = _path()
+        if path is None:
             return None
-        if store.exists('history'):
-            data = store.get('history')
-            return dict(data.get('blocks', {})), dict(data.get('counts', {}))
-        return {}, {}
+        if not os.path.isfile(path):
+            return {}, {}
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except ValueError:
+            # 文件损坏：挪走重建，不让训练记录功能永久失效
+            try:
+                os.replace(path, path + '.corrupt')
+            except OSError:
+                pass
+            return {}, {}
+        h = data.get('history', {}) if isinstance(data, dict) else {}
+        return dict(h.get('blocks', {})), dict(h.get('counts', {}))
     except Exception:
         return None
+
+
+def _write(blocks, counts):
+    path = _path()
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump({'history': {'blocks': blocks, 'counts': counts}}, f, ensure_ascii=False)
+    os.replace(tmp, path)
 
 
 def last_trained():
@@ -73,6 +94,6 @@ def record(block_names):
         for name in block_names:
             blocks[name] = now
             counts[name] = counts.get(name, 0) + 1
-        _get_store().put('history', blocks=blocks, counts=counts)
+        _write(blocks, counts)
     except Exception:
         pass

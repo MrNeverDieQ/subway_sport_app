@@ -22,7 +22,8 @@ except ImportError:
     sys.exit('缺少 mutagen：uv pip install --python .venv\\Scripts\\python.exe mutagen')
 
 result = {}
-for dirpath, _, files in os.walk(AUDIO):
+for dirpath, dirs, files in os.walk(AUDIO):
+    dirs[:] = [d for d in dirs if not d.startswith('_')]  # 跳过 _archive 等备份/样例目录
     for fn in sorted(files):
         if not fn.lower().endswith(('.mp3', '.wav', '.ogg')):
             continue

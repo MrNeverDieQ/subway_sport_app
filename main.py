@@ -35,6 +35,48 @@ class SubwaySportApp(App):
         sm.add_widget(WorkoutScreen(name='workout'))
         return sm
 
+    # 训练中的计时和放音在 Android 上跑在前台服务进程里（见 screens/workout_session.py），
+    # 这里只处理 UI 进程自身的前后台切换：锁屏期间 Kivy 主循环会被挂起，回来时让训练页立刻对齐状态。
+
+    def on_start(self):
+        if platform == 'android':
+            _request_notification_permission()
+            self._rejoin_running_workout()
+
+    def on_pause(self):
+        return True
+
+    def on_resume(self):
+        sm = self.root
+        if sm.current == 'workout':
+            sm.get_screen('workout').refresh()
+        else:
+            self._rejoin_running_workout()
+
+    def _rejoin_running_workout(self):
+        """UI 进程被杀或被用户划掉后再打开：前台服务还在跑就直接回到训练页。"""
+        from screens.workout_session import find_running
+        found = find_running()
+        if not found:
+            return
+        plan, state = found
+        sm = self.root
+        sm.get_screen('workout').attach(plan, state)
+        sm.current = 'workout'
+
+
+def _request_notification_permission():
+    """Android 13+ 前台服务的通知要用户授权才显示；拒绝也不影响服务本身运行。"""
+    try:
+        from android import api_version
+        if api_version < 33:
+            return
+        from android.permissions import request_permissions, Permission
+        request_permissions([Permission.POST_NOTIFICATIONS])
+    except Exception as e:
+        from kivy.logger import Logger
+        Logger.warning('App: 申请通知权限失败 %r', e)
+
 
 if __name__ == '__main__':
     SubwaySportApp().run()

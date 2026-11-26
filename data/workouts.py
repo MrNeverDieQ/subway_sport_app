@@ -51,6 +51,9 @@ def get_goals(duration):
 #   rest   同一动作的组间休息
 # 规则：每个条目前都有一段 guide，长度 = max(上一个条目的 rest, 本段引导需要的时长)，
 #       所以条目之间的休息被 guide 吸收，整个训练以 guide 开头、以 set 结尾。
+# 热身"准备"条目（块的 warmup 列表，entry["warmup"] = True）只有一段 guide、没有 set：
+#       讲解本身就是在摆姿势，边听边做，时长 = max(上一个 rest, 引导时长, duration)，
+#       不再"讲解完 → 开始 → 再站 10 秒"重复两遍。
 # ------------------------------------------------------------
 
 def guide_secs(entry, mode):
@@ -78,6 +81,10 @@ def build_timeline(items, modes):
             mode = SHORT          # 同一次训练里已经讲过，不再重复
         seen.add(key)
         pre = max(prev_rest, guide_secs(e, mode))
+        if e.get("warmup"):
+            timeline.append({"kind": "guide", "ex": i, "set": 0, "secs": max(pre, e["duration"]), "mode": mode})
+            prev_rest = e["rest"]
+            continue
         timeline.append({"kind": "guide", "ex": i, "set": 0, "secs": pre, "mode": mode})
         for k in range(e["sets"]):
             timeline.append({"kind": "set", "ex": i, "set": k, "secs": e["duration"], "mode": mode})
@@ -91,8 +98,12 @@ def timeline_secs(items, modes):
     return sum(s["secs"] for s in build_timeline(items, modes))
 
 
+def _warmup(block):
+    return [dict(e, warmup=True) for e in block.get("warmup", [])]
+
+
 def _expand(block, circuits):
-    return block.get("warmup", []) + block["exercises"] * circuits + block.get("cooldown", [])
+    return _warmup(block) + block["exercises"] * circuits + block.get("cooldown", [])
 
 
 def _items_for(parts):
@@ -132,9 +143,27 @@ class Plan:
         self.timeline = build_timeline(items, modes)
         self.total_secs = sum(s["secs"] for s in self.timeline)
         self.minutes = max(1, round(self.total_secs / 60))
-        self.total_sets = sum(e["sets"] for e in self.entries)
+        self.total_sets = sum(e["sets"] for e in self.entries if not e.get("warmup"))   # 热身不算组
         label = " + ".join(n + (f"×{c}" if c > 1 else "") for n, c in parts)
         self.summary = f"{label}  ·  约 {self.minutes} 分钟"
+
+    # 跨进程传递（UI 进程 → Android 前台服务）用 json；entries 本身就是 training_blocks 里的普通 dict
+    _FIELDS = ("goal", "entries", "blocks", "parts", "modes", "mode_choice",
+               "timeline", "total_secs", "minutes", "total_sets", "summary")
+
+    def to_dict(self):
+        d = {k: getattr(self, k) for k in self._FIELDS}
+        d["parts"] = [list(p) for p in self.parts]
+        return d
+
+    @classmethod
+    def from_dict(cls, d):
+        plan = cls.__new__(cls)
+        for k in cls._FIELDS:
+            setattr(plan, k, d[k])
+        plan.parts = [tuple(p) for p in d["parts"]]
+        plan.items = [(e, None) for e in plan.entries]       # 块归属不再需要，blocks 已单独保存
+        return plan
 
     @property
     def mode_label(self):
@@ -161,11 +190,12 @@ def build_plan(duration, goal, history=None, counts=None, mode=AUTO):
 
 
 # ------------------------------------------------------------
-# 力量训练：覆盖优先、深度补足
+# 力量训练：覆盖优先，一个部位一次只练一轮
 #   1. 按"最久没练的排前面"给训练块排序（没练过的最优先，同级按默认顺序）
-#   2. 第一轮：每个块先放 1 轮，按顺序能放就放，保证训练部位多样
-#   3. 第二轮：反复给"能放下且增量最大"的块加 1 轮（不超过块定义的 circuit_sets）
+#   2. 每个块最多放 1 轮，按顺序能放就放，保证训练部位多样；放不下的跳过，继续试后面更短的块
+#   不再为了填满时间给同一部位加轮（静态对抗一个部位反复做容易过度负荷），所以时长有可能明显低于所选
 #   时长按时间线算，详细模式下讲解时间也算在内（新手少练多听）；一个块都放不下时取最短的那个
+#   块数据里的 circuit_sets 字段保留但不再使用
 # ------------------------------------------------------------
 
 def _order_blocks(history):
@@ -192,19 +222,6 @@ def _build_strength(target, history, counts, mode):
     if not circuits:
         circuits = {min(order, key=lambda n: total_for({n: 1})): 1}
 
-    while True:
-        best = None
-        for name, c in circuits.items():
-            if c >= TRAINING_BLOCKS[name]["circuit_sets"]:
-                continue
-            trial = dict(circuits, **{name: c + 1})
-            secs = total_for(trial)
-            if secs <= target and (best is None or secs > best[1]):
-                best = (name, secs)
-        if best is None:
-            break
-        circuits[best[0]] += 1
-
     parts = [(n, circuits[n]) for n in order if n in circuits]
     items = _items_for(parts)
     return Plan("力量训练", items, [(_SHORT.get(n, n), c) for n, c in parts],
@@ -218,7 +235,7 @@ def _build_strength(target, history, counts, mode):
 def _build_breath(target, counts, mode):
     block = TRAINING_BLOCKS[_BREATH_BLOCK]
     modes = resolve_modes([_BREATH_BLOCK], mode, counts)
-    warmup = block.get("warmup", [])
+    warmup = _warmup(block)
     cooldown = block.get("cooldown", [])
     main = block["exercises"][0]
     rest_ex = block["exercises"][1:]

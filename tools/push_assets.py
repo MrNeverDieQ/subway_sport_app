@@ -132,6 +132,10 @@ def main():
         print('已提交:', msg)
     if args.no_push:
         return
+    # CI 首次运行会把 debug.keystore 提交到远端 main，本地镜像落后于远端时先 rebase 再推
+    run(git, dest, 'fetch', 'origin', 'main', check=False)
+    if run(git, dest, 'rev-parse', '--verify', '-q', 'origin/main', check=False, capture=True).strip():
+        run(git, dest, 'rebase', 'origin/main')
     run(git, dest, 'push', '-u', 'origin', 'main')
     print('已推送到', args.remote)
 

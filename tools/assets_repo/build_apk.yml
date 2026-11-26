@@ -106,7 +106,9 @@ jobs:
             git zip unzip autoconf libtool \
             libffi-dev libssl-dev libsqlite3-dev \
             python3-pip ccache
-          pip install buildozer cython
+          # buildozer 固定 1.5.0：和 buildozer.spec 里 p4a.commit=v2024.01.21 配套（2026-03 验证过的组合）；
+          # cython<3.1：Kivy 2.3.0 官方支持范围是 0.29.x~3.0.x。buildozer.spec 变化会使 ~/.buildozer 缓存失效、重下 SDK/NDK。
+          pip install "buildozer==1.5.0" "cython<3.1"
 
       - name: Cache buildozer global (SDK / NDK)
         uses: actions/cache@v4

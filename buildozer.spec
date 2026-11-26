@@ -24,6 +24,14 @@ android.api = 33
 android.minapi = 21
 android.archs = arm64-v8a, armeabi-v7a
 android.accept_sdk_license = True
+android.ndk = 25b
+
+# python-for-android 固定到 v2024.01.21（master 自 2026-05 起是 v2026.05.09：ffmpeg 8.0.1 删掉了 libavcodec/avfft.h，
+# 而 ffpyplayer 4.5.x 仍然 include 它，ffpyplayer 编不过，2026-11-26 CI 实测失败）。
+# 2024.01.21 = ffmpeg 4.3.1 + ffpyplayer 4.3.2 + Python 3.11.5 + NDK 25b，2026-03 CI 验证过能出包。
+# 想升 p4a 时先确认 ffpyplayer 支持 FFmpeg 8（或 p4a 的 ffpyplayer 配方打了补丁）。
+p4a.branch = master
+p4a.commit = 957a3e5f8c270f7aa648ba185e5a68c1077a798d
 
 [buildozer]
 log_level = 2

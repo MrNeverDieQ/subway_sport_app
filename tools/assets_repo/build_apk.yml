@@ -132,6 +132,10 @@ jobs:
           BUILDOZER_WARN_ON_ROOT: 0
         run: |
           set -o pipefail
+          # 资产约 200MB 全部进 assets/private.tar，Gradle 守护进程默认 512MB 堆在 :compressDebugAssets 会 "Java heap space"（2026-11-26 run#3 实测）。
+          # ~/.gradle/gradle.properties 优先级高于 p4a 生成的工程配置，runner 有 16GB 内存。
+          mkdir -p ~/.gradle
+          printf 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m\n' > ~/.gradle/gradle.properties
           yes | buildozer android debug 2>&1 | tee build.log
           grep -E "^(Error|Traceback|# Build)" build.log || true
 

@@ -87,7 +87,7 @@ jobs:
           BUILDOZER_WARN_ON_ROOT: 0
         run: |
           set -o pipefail
-          yes | buildozer android debug 2>&1 | tee build.log
+          (yes 2>/dev/null || true) | buildozer android debug 2>&1 | tee build.log
           grep -E "^(Error|Traceback|# Build)" build.log || true
 
       - name: Upload APK (stub content, not for use)

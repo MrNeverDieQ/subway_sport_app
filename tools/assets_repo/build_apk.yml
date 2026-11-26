@@ -136,7 +136,8 @@ jobs:
           # ~/.gradle/gradle.properties 优先级高于 p4a 生成的工程配置，runner 有 16GB 内存。
           mkdir -p ~/.gradle
           printf 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m\n' > ~/.gradle/gradle.properties
-          yes | buildozer android debug 2>&1 | tee build.log
+          # (yes || true)：buildozer 退出后 yes 被 SIGPIPE 杀掉返回 141，pipefail 会把成功的构建判成失败（run#4 实测，APK 已生成却没上传）
+          (yes 2>/dev/null || true) | buildozer android debug 2>&1 | tee build.log
           grep -E "^(Error|Traceback|# Build)" build.log || true
 
       - name: Name the APK
